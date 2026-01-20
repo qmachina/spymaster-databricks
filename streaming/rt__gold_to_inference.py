@@ -34,10 +34,11 @@ logger.info("Spark configuration complete")
 # COMMAND ----------
 
 # Configuration from widgets
-dbutils.widgets.text("catalog", "spymaster")
-dbutils.widgets.text("gold_schema", "gold")
+dbutils.widgets.text("catalog_gold", "gold")
+dbutils.widgets.text("gold_schema", "default")
 dbutils.widgets.text("gold_table", "feature_vectors")
-dbutils.widgets.text("inference_schema", "gold")
+dbutils.widgets.text("catalog_inference", "gold")
+dbutils.widgets.text("inference_schema", "default")
 dbutils.widgets.text("inference_table", "inference_scores")
 dbutils.widgets.text("eventhub_namespace", "ehnspymasterdevoxxrlojskvxey")
 dbutils.widgets.text("eventhub_name", "inference_scores")
@@ -46,9 +47,10 @@ dbutils.widgets.text("max_files_per_trigger", "500")
 dbutils.widgets.text("max_bytes_per_trigger", "512m")
 dbutils.widgets.text("aml_endpoint_uri", "https://es-model-endpoint.westus.inference.ml.azure.com/score")
 
-CATALOG = dbutils.widgets.get("catalog")
+CATALOG_GOLD = dbutils.widgets.get("catalog_gold")
 GOLD_SCHEMA = dbutils.widgets.get("gold_schema")
 GOLD_TABLE = dbutils.widgets.get("gold_table")
+CATALOG_INFERENCE = dbutils.widgets.get("catalog_inference")
 INFERENCE_SCHEMA = dbutils.widgets.get("inference_schema")
 INFERENCE_TABLE = dbutils.widgets.get("inference_table")
 EVENTHUB_NAMESPACE = dbutils.widgets.get("eventhub_namespace")
@@ -58,8 +60,8 @@ MAX_FILES_PER_TRIGGER = int(dbutils.widgets.get("max_files_per_trigger"))
 MAX_BYTES_PER_TRIGGER = dbutils.widgets.get("max_bytes_per_trigger")
 AML_ENDPOINT_URI = dbutils.widgets.get("aml_endpoint_uri")
 
-GOLD_FULL_TABLE = f"{CATALOG}.{GOLD_SCHEMA}.{GOLD_TABLE}"
-INFERENCE_FULL_TABLE = f"{CATALOG}.{INFERENCE_SCHEMA}.{INFERENCE_TABLE}"
+GOLD_FULL_TABLE = f"{CATALOG_GOLD}.{GOLD_SCHEMA}.{GOLD_TABLE}"
+INFERENCE_FULL_TABLE = f"{CATALOG_INFERENCE}.{INFERENCE_SCHEMA}.{INFERENCE_TABLE}"
 
 AML_API_KEY = dbutils.secrets.get(scope="spymaster-runtime", key="aml-endpoint-key")
 EVENTHUB_CONNECTION_STRING = dbutils.secrets.get(scope="spymaster-runtime", key="eventhub-connection-string")

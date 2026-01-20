@@ -42,26 +42,28 @@ logger.info("Spark configuration complete")
 # COMMAND ----------
 
 # Configuration from widgets
-dbutils.widgets.text("catalog", "spymaster")
-dbutils.widgets.text("bronze_schema", "bronze")
+dbutils.widgets.text("catalog_bronze", "bronze")
+dbutils.widgets.text("bronze_schema", "default")
 dbutils.widgets.text("bronze_table", "mbo_stream")
-dbutils.widgets.text("silver_schema", "silver")
+dbutils.widgets.text("catalog_silver", "silver")
+dbutils.widgets.text("silver_schema", "default")
 dbutils.widgets.text("silver_table", "orderbook_5s")
 dbutils.widgets.text("checkpoint_base", "abfss://lake@spymasterdevlakeoxxrlojs.dfs.core.windows.net/checkpoints")
 dbutils.widgets.text("max_files_per_trigger", "1000")
 dbutils.widgets.text("max_bytes_per_trigger", "1g")
 
-CATALOG = dbutils.widgets.get("catalog")
+CATALOG_BRONZE = dbutils.widgets.get("catalog_bronze")
 BRONZE_SCHEMA = dbutils.widgets.get("bronze_schema")
 BRONZE_TABLE = dbutils.widgets.get("bronze_table")
+CATALOG_SILVER = dbutils.widgets.get("catalog_silver")
 SILVER_SCHEMA = dbutils.widgets.get("silver_schema")
 SILVER_TABLE = dbutils.widgets.get("silver_table")
 CHECKPOINT_BASE = dbutils.widgets.get("checkpoint_base")
 MAX_FILES_PER_TRIGGER = int(dbutils.widgets.get("max_files_per_trigger"))
 MAX_BYTES_PER_TRIGGER = dbutils.widgets.get("max_bytes_per_trigger")
 
-BRONZE_FULL_TABLE = f"{CATALOG}.{BRONZE_SCHEMA}.{BRONZE_TABLE}"
-SILVER_FULL_TABLE = f"{CATALOG}.{SILVER_SCHEMA}.{SILVER_TABLE}"
+BRONZE_FULL_TABLE = f"{CATALOG_BRONZE}.{BRONZE_SCHEMA}.{BRONZE_TABLE}"
+SILVER_FULL_TABLE = f"{CATALOG_SILVER}.{SILVER_SCHEMA}.{SILVER_TABLE}"
 
 # COMMAND ----------
 

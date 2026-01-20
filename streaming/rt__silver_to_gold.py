@@ -33,10 +33,11 @@ logger.info("Spark configuration complete")
 # COMMAND ----------
 
 # Configuration from widgets
-dbutils.widgets.text("catalog", "spymaster")
-dbutils.widgets.text("silver_schema", "silver")
+dbutils.widgets.text("catalog_silver", "silver")
+dbutils.widgets.text("silver_schema", "default")
 dbutils.widgets.text("silver_table", "orderbook_5s")
-dbutils.widgets.text("gold_schema", "gold")
+dbutils.widgets.text("catalog_gold", "gold")
+dbutils.widgets.text("gold_schema", "default")
 dbutils.widgets.text("gold_table", "feature_vectors")
 dbutils.widgets.text("eventhub_namespace", "ehnspymasterdevoxxrlojskvxey")
 dbutils.widgets.text("eventhub_name", "features_gold")
@@ -44,9 +45,10 @@ dbutils.widgets.text("checkpoint_base", "abfss://lake@spymasterdevlakeoxxrlojs.d
 dbutils.widgets.text("max_files_per_trigger", "1000")
 dbutils.widgets.text("max_bytes_per_trigger", "1g")
 
-CATALOG = dbutils.widgets.get("catalog")
+CATALOG_SILVER = dbutils.widgets.get("catalog_silver")
 SILVER_SCHEMA = dbutils.widgets.get("silver_schema")
 SILVER_TABLE = dbutils.widgets.get("silver_table")
+CATALOG_GOLD = dbutils.widgets.get("catalog_gold")
 GOLD_SCHEMA = dbutils.widgets.get("gold_schema")
 GOLD_TABLE = dbutils.widgets.get("gold_table")
 EVENTHUB_NAMESPACE = dbutils.widgets.get("eventhub_namespace")
@@ -55,8 +57,8 @@ CHECKPOINT_BASE = dbutils.widgets.get("checkpoint_base")
 MAX_FILES_PER_TRIGGER = int(dbutils.widgets.get("max_files_per_trigger"))
 MAX_BYTES_PER_TRIGGER = dbutils.widgets.get("max_bytes_per_trigger")
 
-SILVER_FULL_TABLE = f"{CATALOG}.{SILVER_SCHEMA}.{SILVER_TABLE}"
-GOLD_FULL_TABLE = f"{CATALOG}.{GOLD_SCHEMA}.{GOLD_TABLE}"
+SILVER_FULL_TABLE = f"{CATALOG_SILVER}.{SILVER_SCHEMA}.{SILVER_TABLE}"
+GOLD_FULL_TABLE = f"{CATALOG_GOLD}.{GOLD_SCHEMA}.{GOLD_TABLE}"
 
 EVENTHUB_CONNECTION_STRING = dbutils.secrets.get(scope="spymaster-runtime", key="eventhub-connection-string")
 
