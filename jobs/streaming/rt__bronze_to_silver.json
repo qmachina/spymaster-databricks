@@ -1,0 +1,76 @@
+{
+  "name": "rt__bronze_to_silver",
+  "description": "Real-time streaming: Bronze to Silver with stateful orderbook processing, watermarking, and vectorized ops",
+  "continuous": {
+    "pause_status": "UNPAUSED"
+  },
+  "max_concurrent_runs": 1,
+  "email_notifications": {
+    "on_failure": ["logan@qmachina.com"],
+    "on_streaming_backlog_exceeded": ["logan@qmachina.com"]
+  },
+  "notification_settings": {
+    "alert_on_last_attempt": true,
+    "no_alert_for_skipped_runs": true
+  },
+  "tasks": [
+    {
+      "task_key": "bronze_to_silver",
+      "notebook_task": {
+        "notebook_path": "/Shared/spymaster/rt__bronze_to_silver",
+        "base_parameters": {
+          "catalog": "spymaster",
+          "bronze_schema": "bronze",
+          "bronze_table": "mbo_stream",
+          "silver_schema": "silver",
+          "silver_table": "orderbook_5s",
+          "checkpoint_base": "abfss://lake@spymasterdevlakeoxxrlojs.dfs.core.windows.net/checkpoints",
+          "max_files_per_trigger": "1000",
+          "max_bytes_per_trigger": "1g"
+        },
+        "source": "WORKSPACE"
+      },
+      "new_cluster": {
+        "spark_version": "17.0.x-scala2.12",
+        "node_type_id": "Standard_D8s_v3",
+        "autoscale": {
+          "min_workers": 4,
+          "max_workers": 16
+        },
+        "spark_conf": {
+          "spark.sql.streaming.stateStore.providerClass": "com.databricks.sql.streaming.state.RocksDBStateStoreProvider",
+          "spark.sql.streaming.stateStore.rocksdb.changelogCheckpointing.enabled": "true",
+          "spark.databricks.streaming.statefulOperator.asyncCheckpoint.enabled": "true",
+          "spark.sql.execution.arrow.pyspark.enabled": "true",
+          "spark.databricks.adaptive.autoOptimizeShuffle.enabled": "true",
+          "spark.databricks.delta.autoOptimize.optimizeWrite": "true",
+          "spark.databricks.delta.autoOptimize.autoCompact": "true",
+          "spark.sql.shuffle.partitions": "400"
+        },
+        "custom_tags": {
+          "Environment": "Production",
+          "Project": "Spymaster",
+          "Owner": "DataEng",
+          "Layer": "Silver",
+          "Type": "Streaming",
+          "CostCenter": "RealTime",
+          "Stateful": "True"
+        },
+        "enable_elastic_disk": true,
+        "data_security_mode": "SINGLE_USER"
+      },
+      "timeout_seconds": 0,
+      "retry_policy": {
+        "max_retries": 3,
+        "interval_ms": 30000,
+        "retry_on_timeout": true
+      }
+    }
+  ],
+  "tags": {
+    "Environment": "Production",
+    "Project": "Spymaster",
+    "Pipeline": "RealTime",
+    "Owner": "DataEng"
+  }
+}

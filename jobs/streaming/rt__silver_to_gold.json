@@ -1,0 +1,80 @@
+{
+  "name": "rt__silver_to_gold",
+  "description": "Real-time streaming: Silver to Gold with feature engineering, dual output to Delta and Event Hubs",
+  "continuous": {
+    "pause_status": "UNPAUSED"
+  },
+  "max_concurrent_runs": 1,
+  "email_notifications": {
+    "on_failure": ["logan@qmachina.com"],
+    "on_streaming_backlog_exceeded": ["logan@qmachina.com"]
+  },
+  "notification_settings": {
+    "alert_on_last_attempt": true,
+    "no_alert_for_skipped_runs": true
+  },
+  "tasks": [
+    {
+      "task_key": "silver_to_gold",
+      "notebook_task": {
+        "notebook_path": "/Shared/spymaster/rt__silver_to_gold",
+        "base_parameters": {
+          "catalog": "spymaster",
+          "silver_schema": "silver",
+          "silver_table": "orderbook_5s",
+          "gold_schema": "gold",
+          "gold_table": "feature_vectors",
+          "eventhub_namespace": "ehnspymasterdevoxxrlojskvxey",
+          "eventhub_name": "features_gold",
+          "checkpoint_base": "abfss://lake@spymasterdevlakeoxxrlojs.dfs.core.windows.net/checkpoints",
+          "max_files_per_trigger": "1000",
+          "max_bytes_per_trigger": "1g"
+        },
+        "source": "WORKSPACE"
+      },
+      "new_cluster": {
+        "spark_version": "17.0.x-scala2.12",
+        "node_type_id": "Standard_D8s_v3",
+        "autoscale": {
+          "min_workers": 4,
+          "max_workers": 12
+        },
+        "spark_conf": {
+          "spark.sql.execution.arrow.pyspark.enabled": "true",
+          "spark.databricks.adaptive.autoOptimizeShuffle.enabled": "true",
+          "spark.databricks.delta.autoOptimize.optimizeWrite": "true",
+          "spark.databricks.delta.autoOptimize.autoCompact": "true"
+        },
+        "custom_tags": {
+          "Environment": "Production",
+          "Project": "Spymaster",
+          "Owner": "DataEng",
+          "Layer": "Gold",
+          "Type": "Streaming",
+          "CostCenter": "RealTime"
+        },
+        "enable_elastic_disk": true,
+        "data_security_mode": "SINGLE_USER"
+      },
+      "libraries": [
+        {
+          "maven": {
+            "coordinates": "com.microsoft.azure:azure-eventhubs-spark_2.12:2.3.26"
+          }
+        }
+      ],
+      "timeout_seconds": 0,
+      "retry_policy": {
+        "max_retries": 3,
+        "interval_ms": 30000,
+        "retry_on_timeout": true
+      }
+    }
+  ],
+  "tags": {
+    "Environment": "Production",
+    "Project": "Spymaster",
+    "Pipeline": "RealTime",
+    "Owner": "DataEng"
+  }
+}

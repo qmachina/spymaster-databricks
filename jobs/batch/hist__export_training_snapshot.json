@@ -1,0 +1,28 @@
+{
+  "name": "hist__export_training_snapshot",
+  "tasks": [
+    {
+      "task_key": "export_training_snapshot",
+      "notebook_task": {
+        "notebook_path": "/Shared/spymaster/hist__export_training_snapshot",
+        "source": "WORKSPACE",
+        "base_parameters": {
+          "date": "2025-10-01",
+          "run_date": "2025-10-01",
+          "storage_account": "spymasterdevlakeoxxrlojs",
+          "lake_container": "lake",
+          "ml_container": "ml-artifacts",
+          "underlier": "ES",
+          "instrument_type": "FUT"
+        }
+      },
+      "new_cluster": {
+        "spark_version": "14.3.x-scala2.12",
+        "node_type_id": "Standard_D4s_v3",
+        "num_workers": 1,
+        "data_security_mode": "SINGLE_USER",
+        "single_user_name": "logan@qmachina.com"
+      }
+    }
+  ]
+}
