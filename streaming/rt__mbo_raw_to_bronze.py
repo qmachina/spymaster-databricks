@@ -53,7 +53,7 @@ CHECKPOINT_BASE = dbutils.widgets.get("checkpoint_base")
 MAX_FILES_PER_TRIGGER = int(dbutils.widgets.get("max_files_per_trigger"))
 MAX_BYTES_PER_TRIGGER = dbutils.widgets.get("max_bytes_per_trigger")
 
-EVENTHUB_CONNECTION_STRING = dbutils.secrets.get(scope="spymaster-runtime", key="eventhub-connection-string")
+EVENTHUB_CONNECTION_STRING = dbutils.secrets.get(scope="spymaster", key="eventhub-connection-string")
 
 # COMMAND ----------
 

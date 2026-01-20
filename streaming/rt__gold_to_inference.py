@@ -63,8 +63,8 @@ AML_ENDPOINT_URI = dbutils.widgets.get("aml_endpoint_uri")
 GOLD_FULL_TABLE = f"{CATALOG_GOLD}.{GOLD_SCHEMA}.{GOLD_TABLE}"
 INFERENCE_FULL_TABLE = f"{CATALOG_INFERENCE}.{INFERENCE_SCHEMA}.{INFERENCE_TABLE}"
 
-AML_API_KEY = dbutils.secrets.get(scope="spymaster-runtime", key="aml-endpoint-key")
-EVENTHUB_CONNECTION_STRING = dbutils.secrets.get(scope="spymaster-runtime", key="eventhub-connection-string")
+AML_API_KEY = dbutils.secrets.get(scope="spymaster", key="aml-endpoint-key")
+EVENTHUB_CONNECTION_STRING = dbutils.secrets.get(scope="spymaster", key="eventhub-connection-string")
 
 # COMMAND ----------
 

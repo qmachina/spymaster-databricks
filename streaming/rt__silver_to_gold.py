@@ -60,7 +60,7 @@ MAX_BYTES_PER_TRIGGER = dbutils.widgets.get("max_bytes_per_trigger")
 SILVER_FULL_TABLE = f"{CATALOG_SILVER}.{SILVER_SCHEMA}.{SILVER_TABLE}"
 GOLD_FULL_TABLE = f"{CATALOG_GOLD}.{GOLD_SCHEMA}.{GOLD_TABLE}"
 
-EVENTHUB_CONNECTION_STRING = dbutils.secrets.get(scope="spymaster-runtime", key="eventhub-connection-string")
+EVENTHUB_CONNECTION_STRING = dbutils.secrets.get(scope="spymaster", key="eventhub-connection-string")
 
 # COMMAND ----------
 
