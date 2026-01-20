@@ -21,7 +21,7 @@
     {
       "task_key": "mbo_raw_to_bronze",
       "notebook_task": {
-        "notebook_path": "/Repos/logan@qmachina.com/spymaster-databricks/streaming/rt__mbo_raw_to_bronze",
+        "notebook_path": "streaming/rt__mbo_raw_to_bronze",
         "source": "GIT",
         "base_parameters": {
           "eventhub_namespace": "ehnspymasterdevoxxrlojskvxey",

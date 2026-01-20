@@ -21,7 +21,7 @@
     {
       "task_key": "gold_to_inference",
       "notebook_task": {
-        "notebook_path": "/Repos/logan@qmachina.com/spymaster-databricks/streaming/rt__gold_to_inference",
+        "notebook_path": "streaming/rt__gold_to_inference",
         "source": "GIT",
         "base_parameters": {
           "catalog": "spymaster",

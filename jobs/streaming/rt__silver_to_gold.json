@@ -21,7 +21,7 @@
     {
       "task_key": "silver_to_gold",
       "notebook_task": {
-        "notebook_path": "/Repos/logan@qmachina.com/spymaster-databricks/streaming/rt__silver_to_gold",
+        "notebook_path": "streaming/rt__silver_to_gold",
         "source": "GIT",
         "base_parameters": {
           "catalog": "spymaster",
