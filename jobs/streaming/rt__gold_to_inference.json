@@ -6,8 +6,12 @@
   },
   "max_concurrent_runs": 1,
   "email_notifications": {
-    "on_failure": ["logan@qmachina.com"],
-    "on_streaming_backlog_exceeded": ["logan@qmachina.com"]
+    "on_failure": [
+      "logan@qmachina.com"
+    ],
+    "on_streaming_backlog_exceeded": [
+      "logan@qmachina.com"
+    ]
   },
   "notification_settings": {
     "no_alert_for_skipped_runs": true
@@ -39,12 +43,9 @@
         }
       },
       "new_cluster": {
-        "spark_version": "17.0.x-scala2.12",
-        "node_type_id": "Standard_D4s_v3",
-        "autoscale": {
-          "min_workers": 2,
-          "max_workers": 8
-        },
+        "spark_version": "16.4.x-scala2.12",
+        "node_type_id": "Standard_D2ads_v6",
+        "num_workers": 0,
         "spark_conf": {
           "spark.sql.execution.arrow.pyspark.enabled": "true",
           "spark.databricks.adaptive.autoOptimizeShuffle.enabled": "true",
@@ -65,7 +66,7 @@
       "libraries": [
         {
           "maven": {
-            "coordinates": "com.microsoft.azure:azure-eventhubs-spark_2.12:2.3.26"
+            "coordinates": "com.microsoft.azure:azure-eventhubs-spark_2.12:2.3.22"
           }
         },
         {

@@ -6,8 +6,12 @@
   },
   "max_concurrent_runs": 1,
   "email_notifications": {
-    "on_failure": ["logan@qmachina.com"],
-    "on_streaming_backlog_exceeded": ["logan@qmachina.com"]
+    "on_failure": [
+      "logan@qmachina.com"
+    ],
+    "on_streaming_backlog_exceeded": [
+      "logan@qmachina.com"
+    ]
   },
   "notification_settings": {
     "no_alert_for_skipped_runs": true
@@ -36,12 +40,9 @@
         }
       },
       "new_cluster": {
-        "spark_version": "17.0.x-scala2.12",
-        "node_type_id": "Standard_D8s_v3",
-        "autoscale": {
-          "min_workers": 4,
-          "max_workers": 16
-        },
+        "spark_version": "16.4.x-scala2.12",
+        "node_type_id": "Standard_D2ads_v6",
+        "num_workers": 0,
         "spark_conf": {
           "spark.sql.streaming.stateStore.providerClass": "com.databricks.sql.streaming.state.RocksDBStateStoreProvider",
           "spark.sql.streaming.stateStore.rocksdb.changelogCheckpointing.enabled": "true",
