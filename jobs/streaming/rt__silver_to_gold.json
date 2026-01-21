@@ -30,7 +30,7 @@
         "base_parameters": {
           "catalog_silver": "silver",
           "silver_schema": "default",
-          "silver_table": "orderbook_5s",
+          "silver_table": "feature_primitives",
           "catalog_gold": "gold",
           "gold_schema": "default",
           "gold_table": "feature_vectors",
@@ -62,13 +62,6 @@
         "enable_elastic_disk": true,
         "data_security_mode": "SINGLE_USER"
       },
-      "libraries": [
-        {
-          "maven": {
-            "coordinates": "com.microsoft.azure:azure-eventhubs-spark_2.12:2.3.22"
-          }
-        }
-      ],
       "timeout_seconds": 0
     }
   ],

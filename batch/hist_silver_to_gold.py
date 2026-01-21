@@ -74,7 +74,7 @@ def main() -> None:
     )
 
     df_vec = (
-        df_vec.withColumn("vector_time", F.col("bucket_ts"))
+        df_vec.withColumn("vector_time", F.col("bucket_ns"))
         .withColumn("model_id", F.concat(F.col("underlier"), F.lit("_MODEL")))
         .withColumn("lookback_spec", F.lit("5s"))
         .withColumn("data_version", F.lit("silver.feature_primitives"))

@@ -37,7 +37,10 @@
           "dlq_table_name": "mbo_stream_dlq",
           "checkpoint_base": "abfss://lake@spymasterdevlakeoxxrlojs.dfs.core.windows.net/checkpoints",
           "max_files_per_trigger": "1000",
-          "max_bytes_per_trigger": "1g"
+          "max_bytes_per_trigger": "1g",
+          "max_offsets_per_trigger": "50000",
+          "kafka_request_timeout_ms": "60000",
+          "kafka_session_timeout_ms": "30000"
         }
       },
       "new_cluster": {
@@ -63,13 +66,6 @@
         "enable_elastic_disk": true,
         "data_security_mode": "SINGLE_USER"
       },
-      "libraries": [
-        {
-          "maven": {
-            "coordinates": "com.microsoft.azure:azure-eventhubs-spark_2.12:2.3.22"
-          }
-        }
-      ],
       "timeout_seconds": 0
     }
   ],

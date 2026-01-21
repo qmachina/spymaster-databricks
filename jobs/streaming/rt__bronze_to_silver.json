@@ -33,7 +33,7 @@
           "bronze_table": "mbo_stream",
           "catalog_silver": "silver",
           "silver_schema": "default",
-          "silver_table": "orderbook_5s",
+          "silver_table": "feature_primitives",
           "checkpoint_base": "abfss://lake@spymasterdevlakeoxxrlojs.dfs.core.windows.net/checkpoints",
           "max_files_per_trigger": "1000",
           "max_bytes_per_trigger": "1g"

@@ -41,6 +41,9 @@ dbutils.widgets.text("dlq_table_name", "mbo_stream_dlq")
 dbutils.widgets.text("checkpoint_base", "abfss://lake@spymasterdevlakeoxxrlojs.dfs.core.windows.net/checkpoints")
 dbutils.widgets.text("max_files_per_trigger", "1000")
 dbutils.widgets.text("max_bytes_per_trigger", "1g")
+dbutils.widgets.text("max_offsets_per_trigger", "50000")
+dbutils.widgets.text("kafka_request_timeout_ms", "60000")
+dbutils.widgets.text("kafka_session_timeout_ms", "30000")
 
 EVENTHUB_NAMESPACE = dbutils.widgets.get("eventhub_namespace")
 EVENTHUB_NAME = dbutils.widgets.get("eventhub_name")
@@ -52,6 +55,9 @@ DLQ_TABLE_NAME = dbutils.widgets.get("dlq_table_name")
 CHECKPOINT_BASE = dbutils.widgets.get("checkpoint_base")
 MAX_FILES_PER_TRIGGER = int(dbutils.widgets.get("max_files_per_trigger"))
 MAX_BYTES_PER_TRIGGER = dbutils.widgets.get("max_bytes_per_trigger")
+MAX_OFFSETS_PER_TRIGGER = int(dbutils.widgets.get("max_offsets_per_trigger"))
+KAFKA_REQUEST_TIMEOUT_MS = dbutils.widgets.get("kafka_request_timeout_ms")
+KAFKA_SESSION_TIMEOUT_MS = dbutils.widgets.get("kafka_session_timeout_ms")
 
 EVENTHUB_CONNECTION_STRING = dbutils.secrets.get(scope="spymaster", key="eventhub-connection-string")
 
@@ -62,7 +68,7 @@ bronze_schema = StructType([
     StructField("event_time", LongType(), True),
     StructField("ingest_time", LongType(), True),
     StructField("venue", StringType(), True),
-    StructField("symbol", IntegerType(), True),
+    StructField("symbol", StringType(), True),
     StructField("instrument_type", StringType(), True),
     StructField("underlier", StringType(), True),
     StructField("contract_id", StringType(), True),
@@ -70,29 +76,39 @@ bronze_schema = StructType([
     StructField("order_id", LongType(), True),
     StructField("side", StringType(), True),
     StructField("price", DoubleType(), True),
-    StructField("size", IntegerType(), True),
+    StructField("size", LongType(), True),
     StructField("sequence", LongType(), True),
     StructField("payload", StringType(), True),
 ])
 
 # COMMAND ----------
 
-# Event Hubs configuration
-starting_position = json.dumps(
-    {
-        "seqNo": -1,
-        "offset": "-1",
-        "enqueuedTime": None,
-        "isInclusive": True,
-    }
-)
+# Event Hubs Kafka configuration
+if not EVENTHUB_NAMESPACE:
+    raise ValueError("eventhub_namespace is required")
+if not EVENTHUB_NAME:
+    raise ValueError("eventhub_name is required")
+if not EVENTHUB_CONNECTION_STRING:
+    raise ValueError("eventhub-connection-string is required")
 
-ehConf = {
-    "eventhubs.connectionString": sc._jvm.org.apache.spark.eventhubs.EventHubsUtils.encrypt(
-        f"{EVENTHUB_CONNECTION_STRING};EntityPath={EVENTHUB_NAME}"
+eventhub_conn_str = EVENTHUB_CONNECTION_STRING.split(";EntityPath=")[0].strip()
+if not eventhub_conn_str:
+    raise ValueError("eventhub-connection-string is empty")
+
+kafka_options = {
+    "kafka.bootstrap.servers": f"{EVENTHUB_NAMESPACE}.servicebus.windows.net:9093",
+    "subscribe": EVENTHUB_NAME,
+    "kafka.security.protocol": "SASL_SSL",
+    "kafka.sasl.mechanism": "PLAIN",
+    "kafka.sasl.jaas.config": (
+        'kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule '
+        f'required username="$ConnectionString" password="{eventhub_conn_str}";'
     ),
-    "eventhubs.consumerGroup": CONSUMER_GROUP,
-    "eventhubs.startingPosition": starting_position,
+    "startingOffsets": "latest",
+    "kafka.group.id": CONSUMER_GROUP,
+    "maxOffsetsPerTrigger": str(MAX_OFFSETS_PER_TRIGGER),
+    "kafka.request.timeout.ms": KAFKA_REQUEST_TIMEOUT_MS,
+    "kafka.session.timeout.ms": KAFKA_SESSION_TIMEOUT_MS,
 }
 
 # COMMAND ----------
@@ -100,8 +116,8 @@ ehConf = {
 # Read from Event Hubs
 df_raw = (
     spark.readStream
-    .format("eventhubs")
-    .options(**ehConf)
+    .format("kafka")
+    .options(**kafka_options)
     .load()
 )
 
@@ -109,11 +125,11 @@ df_raw = (
 df_parsed = (
     df_raw
     .select(
-        col("body").cast("string").alias("body_str"),
-        from_json(col("body").cast("string"), bronze_schema).alias("data"),
-        col("enqueuedTime").alias("eventhub_enqueued_time"),
-        col("offset").alias("eventhub_offset"),
-        col("sequenceNumber").alias("eventhub_sequence"),
+        col("value").cast("string").alias("body_str"),
+        from_json(col("value").cast("string"), bronze_schema).alias("data"),
+        col("timestamp").alias("eventhub_enqueued_time"),
+        col("offset").cast("string").alias("eventhub_offset"),
+        col("offset").alias("eventhub_sequence"),
         col("partition").alias("eventhub_partition")
     )
     .withColumn("bronze_ingest_time", current_timestamp())

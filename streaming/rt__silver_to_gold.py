@@ -8,12 +8,12 @@
 
 import logging
 import json
+import pandas as pd
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
-    col, window, lag, avg, stddev, sum as spark_sum,
-    array, lit, current_timestamp, to_json, struct, from_unixtime
+    col, array, lit, current_timestamp, to_json, struct
 )
-from pyspark.sql.window import Window
+from pyspark.sql.streaming.state import GroupState, GroupStateTimeout
 from pyspark.sql.types import (
     StructType, StructField, StringType, LongType, DoubleType,
     IntegerType, ArrayType, TimestampType
@@ -35,7 +35,7 @@ logger.info("Spark configuration complete")
 # Configuration from widgets
 dbutils.widgets.text("catalog_silver", "silver")
 dbutils.widgets.text("silver_schema", "default")
-dbutils.widgets.text("silver_table", "orderbook_5s")
+dbutils.widgets.text("silver_table", "feature_primitives")
 dbutils.widgets.text("catalog_gold", "gold")
 dbutils.widgets.text("gold_schema", "default")
 dbutils.widgets.text("gold_table", "feature_vectors")
@@ -78,90 +78,102 @@ df_silver = (
 # Add timestamp column for watermarking
 df_silver = (
     df_silver
-    .withColumn("bar_time_ts", from_unixtime(col("bar_ts") / lit(1_000_000_000)).cast("timestamp"))
-    .withWatermark("bar_time_ts", "10 minutes")
+    .withWatermark("bucket_ts", "10 minutes")
 )
 
 logger.info("Silver stream loaded with watermark")
 
 # COMMAND ----------
 
-# Compute feature primitives using window functions
-# This creates a streaming window over the bar_5s data
+state_schema = StructType([
+    StructField("last_mid", DoubleType(), True),
+])
 
-# Define window specs for lookback calculations with explicit ROWS BETWEEN for determinism
-window_spec_5 = Window.partitionBy("contract_id").orderBy("bar_ts").rowsBetween(-4, 0)
-window_spec_10 = Window.partitionBy("contract_id").orderBy("bar_ts").rowsBetween(-9, 0)
-window_spec_20 = Window.partitionBy("contract_id").orderBy("bar_ts").rowsBetween(-19, 0)
+output_schema = StructType([
+    StructField("contract_id", StringType(), True),
+    StructField("vector_time", LongType(), True),
+    StructField("session_date", StringType(), True),
+    StructField("underlier", StringType(), True),
+    StructField("instrument_type", StringType(), True),
+    StructField("ofi_ratio", DoubleType(), True),
+    StructField("spread", DoubleType(), True),
+    StructField("mid_change", DoubleType(), True),
+    StructField("vwap", DoubleType(), True),
+    StructField("event_count", LongType(), True),
+    StructField("feature_vector", ArrayType(DoubleType()), True),
+])
 
-df_features = (
-    df_silver
-    # Price returns
-    .withColumn("prev_close", lag("close_price", 1).over(Window.partitionBy("contract_id").orderBy("bar_ts")))
-    .withColumn("return_1", (col("close_price") - col("prev_close")) / col("prev_close"))
 
-    # Moving averages
-    .withColumn("ma_5", avg("close_price").over(window_spec_5))
-    .withColumn("ma_10", avg("close_price").over(window_spec_10))
-    .withColumn("ma_20", avg("close_price").over(window_spec_20))
+def build_feature_vectors(
+    key,
+    pdf_iter,
+    state: GroupState,
+):
+    contract_id = key[0]
+    last_mid = None
+    if state.exists:
+        last_mid = state.get["last_mid"]
 
-    # Volatility
-    .withColumn("vol_5", stddev("close_price").over(window_spec_5))
-    .withColumn("vol_10", stddev("close_price").over(window_spec_10))
+    outputs = []
+    for pdf in pdf_iter:
+        if pdf.empty:
+            continue
+        pdf = pdf.sort_values("bucket_ns")
+        prev_mid = pdf["mid"].shift(1)
+        if last_mid is not None:
+            prev_mid.iloc[0] = last_mid
+        else:
+            prev_mid.iloc[0] = pdf["mid"].iloc[0]
+        pdf["mid_change"] = pdf["mid"] - prev_mid
 
-    # Volume features
-    .withColumn("vol_ma_5", avg("volume").over(window_spec_5))
-    .withColumn("vol_ratio", col("volume") / col("vol_ma_5"))
+        for _, row in pdf.iterrows():
+            feature_vector = [
+                float(row["ofi_ratio"]),
+                float(row["spread"]),
+                float(row["mid_change"]),
+                float(row["vwap"]),
+                float(row["event_count"]),
+            ]
+            outputs.append(
+                {
+                    "contract_id": contract_id,
+                    "vector_time": int(row["bucket_ns"]),
+                    "session_date": str(row["session_date"]),
+                    "underlier": str(row["underlier"]),
+                    "instrument_type": str(row["instrument_type"]),
+                    "ofi_ratio": float(row["ofi_ratio"]),
+                    "spread": float(row["spread"]),
+                    "mid_change": float(row["mid_change"]),
+                    "vwap": float(row["vwap"]),
+                    "event_count": int(row["event_count"]),
+                    "feature_vector": feature_vector,
+                }
+            )
 
-    # Spread features
-    .withColumn("spread_ma_5", avg("spread").over(window_spec_5))
-    .withColumn("spread_ratio", col("spread") / col("spread_ma_5"))
+        last_mid = float(pdf["mid"].iloc[-1])
 
-    # Price position relative to MAs
-    .withColumn("price_vs_ma5", (col("close_price") - col("ma_5")) / col("ma_5"))
-    .withColumn("price_vs_ma10", (col("close_price") - col("ma_10")) / col("ma_10"))
+    if last_mid is not None:
+        state.update({"last_mid": last_mid})
+        state.setTimeoutDuration(600000)
 
-    # Momentum
-    .withColumn("momentum_5", col("close_price") - lag("close_price", 5).over(Window.partitionBy("contract_id").orderBy("bar_ts")))
-    .withColumn("momentum_10", col("close_price") - lag("close_price", 10).over(Window.partitionBy("contract_id").orderBy("bar_ts")))
+    if outputs:
+        yield pd.DataFrame(outputs)
+    else:
+        yield pd.DataFrame(columns=output_schema.fieldNames())
 
-    # Bid-ask imbalance
-    .withColumn("bid_ask_imbalance", (col("bid_price") - col("ask_price")) / col("spread"))
-)
 
-# COMMAND ----------
-
-# Create feature vector array
 df_vectors = (
-    df_features
-    .select(
-        col("contract_id"),
-        col("bar_ts").alias("vector_time"),
-        col("session_date"),
-        col("close_price"),
-        col("volume"),
-        array(
-            col("return_1"),
-            col("price_vs_ma5"),
-            col("price_vs_ma10"),
-            col("vol_ratio"),
-            col("spread_ratio"),
-        ).alias("feature_vector"),
-        # Also keep individual features for dashboard
-        col("return_1"),
-        col("ma_5"),
-        col("ma_10"),
-        col("vol_5"),
-        col("vol_ratio"),
-        col("spread"),
-        col("spread_ratio"),
-        col("momentum_5"),
-        col("momentum_10"),
-        col("bid_ask_imbalance"),
+    df_silver
+    .groupBy("contract_id")
+    .applyInPandasWithState(
+        build_feature_vectors,
+        outputStructType=output_schema,
+        stateStructType=state_schema,
+        outputMode="append",
+        timeoutConf=GroupStateTimeout.ProcessingTimeTimeout,
     )
     .withColumn("model_id", lit("ES_MODEL"))
     .withColumn("gold_ingest_time", current_timestamp())
-    .na.fill(0.0)  # Handle nulls from window functions at stream start
 )
 
 # COMMAND ----------
@@ -185,9 +197,25 @@ logger.info("Gold Delta write query started")
 # Publish to Event Hubs for Fabric ingestion
 logger.info(f"Publishing to Event Hub: {EVENTHUB_NAMESPACE}/{EVENTHUB_NAME}")
 
-ehConf = {
-    "eventhubs.connectionString": sc._jvm.org.apache.spark.eventhubs.EventHubsUtils.encrypt(
-        f"{EVENTHUB_CONNECTION_STRING};EntityPath={EVENTHUB_NAME}"
+if not EVENTHUB_NAMESPACE:
+    raise ValueError("eventhub_namespace is required")
+if not EVENTHUB_NAME:
+    raise ValueError("eventhub_name is required")
+if not EVENTHUB_CONNECTION_STRING:
+    raise ValueError("eventhub-connection-string is required")
+
+eventhub_conn_str = EVENTHUB_CONNECTION_STRING.split(";EntityPath=")[0].strip()
+if not eventhub_conn_str:
+    raise ValueError("eventhub-connection-string is empty")
+
+kafka_write_options = {
+    "kafka.bootstrap.servers": f"{EVENTHUB_NAMESPACE}.servicebus.windows.net:9093",
+    "topic": EVENTHUB_NAME,
+    "kafka.security.protocol": "SASL_SSL",
+    "kafka.sasl.mechanism": "PLAIN",
+    "kafka.sasl.jaas.config": (
+        'kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule '
+        f'required username="$ConnectionString" password="{eventhub_conn_str}";'
     ),
 }
 
@@ -198,22 +226,19 @@ df_to_eventhub = (
             col("contract_id"),
             col("vector_time"),
             col("model_id"),
-            col("close_price"),
-            col("volume"),
-            col("return_1"),
-            col("ma_5"),
-            col("vol_ratio"),
+            col("ofi_ratio"),
             col("spread"),
-            col("momentum_5"),
-            col("bid_ask_imbalance"),
-        )).alias("body")
+            col("mid_change"),
+            col("vwap"),
+            col("event_count"),
+        )).alias("value")
     )
 )
 
 query_eventhub = (
     df_to_eventhub.writeStream
-    .format("eventhubs")
-    .options(**ehConf)
+    .format("kafka")
+    .options(**kafka_write_options)
     .option("checkpointLocation", f"{CHECKPOINT_BASE}/rt__gold_eventhub")
     .trigger(processingTime="10 seconds")
     .start()

@@ -1,0 +1,49 @@
+{
+  "name": "smoke__end_to_end",
+  "max_concurrent_runs": 1,
+  "git_source": {
+    "git_url": "https://github.com/qmachina/spymaster-databricks",
+    "git_provider": "gitHub",
+    "git_branch": "main"
+  },
+  "tasks": [
+    {
+      "task_key": "smoke_end_to_end",
+      "notebook_task": {
+        "notebook_path": "batch/smoke__end_to_end",
+        "source": "GIT",
+        "base_parameters": {
+          "eventhub_namespace": "ehnspymasterdevoxxrlojskvxey",
+          "eventhub_name": "mbo_raw",
+          "consumer_group": "smoke_pipeline",
+          "checkpoint_base": "abfss://lake@spymasterdevlakeoxxrlojs.dfs.core.windows.net/checkpoints",
+          "catalog_bronze": "bronze",
+          "schema_bronze": "default",
+          "table_bronze": "mbo_smoke",
+          "catalog_gold": "gold",
+          "schema_gold": "default",
+          "table_model_registry": "mbo_smoke_models",
+          "table_scores": "mbo_smoke_scores",
+          "starting_offsets": "latest",
+          "max_offsets_per_trigger": "10000",
+          "kafka_request_timeout_ms": "60000",
+          "kafka_session_timeout_ms": "30000",
+          "min_records": "10"
+        }
+      },
+      "new_cluster": {
+        "spark_version": "16.4.x-scala2.12",
+        "node_type_id": "Standard_D2ads_v6",
+        "num_workers": 0,
+        "data_security_mode": "SINGLE_USER"
+      },
+      "timeout_seconds": 0
+    }
+  ],
+  "tags": {
+    "Environment": "Smoke",
+    "Project": "Spymaster",
+    "Pipeline": "Smoke",
+    "Owner": "DataEng"
+  }
+}

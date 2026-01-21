@@ -47,7 +47,7 @@ dbutils.widgets.text("bronze_schema", "default")
 dbutils.widgets.text("bronze_table", "mbo_stream")
 dbutils.widgets.text("catalog_silver", "silver")
 dbutils.widgets.text("silver_schema", "default")
-dbutils.widgets.text("silver_table", "orderbook_5s")
+dbutils.widgets.text("silver_table", "feature_primitives")
 dbutils.widgets.text("checkpoint_base", "abfss://lake@spymasterdevlakeoxxrlojs.dfs.core.windows.net/checkpoints")
 dbutils.widgets.text("max_files_per_trigger", "1000")
 dbutils.widgets.text("max_bytes_per_trigger", "1g")
@@ -90,24 +90,27 @@ class OrderbookState:
 # Bar 5s output schema
 bar_5s_schema = StructType([
     StructField("contract_id", StringType(), True),
-    StructField("bar_ts", LongType(), True),
-    StructField("open_price", DoubleType(), True),
-    StructField("high_price", DoubleType(), True),
-    StructField("low_price", DoubleType(), True),
-    StructField("close_price", DoubleType(), True),
-    StructField("volume", LongType(), True),
-    StructField("trade_count", IntegerType(), True),
-    StructField("bid_price", DoubleType(), True),
-    StructField("ask_price", DoubleType(), True),
-    StructField("spread", DoubleType(), True),
-    StructField("mid_price", DoubleType(), True),
+    StructField("bucket_ns", LongType(), True),
+    StructField("bucket_ts", TimestampType(), True),
     StructField("session_date", StringType(), True),
+    StructField("underlier", StringType(), True),
+    StructField("instrument_type", StringType(), True),
+    StructField("event_count", LongType(), True),
+    StructField("size_total", LongType(), True),
+    StructField("buy_size", LongType(), True),
+    StructField("sell_size", LongType(), True),
+    StructField("vwap", DoubleType(), True),
+    StructField("ofi", LongType(), True),
+    StructField("ofi_ratio", DoubleType(), True),
+    StructField("mid", DoubleType(), True),
+    StructField("spread", DoubleType(), True),
+    StructField("best_bid", DoubleType(), True),
+    StructField("best_ask", DoubleType(), True),
 ])
 
 # State output schema
 state_output_schema = StructType([
-    StructField("contract_id", StringType()),
-    StructField("state_json", StringType()),
+    StructField("state_json", StringType(), True),
 ])
 
 # COMMAND ----------
@@ -126,7 +129,7 @@ def process_orderbook_updates(
 
     # Load or initialize state
     if state.exists:
-        book_state = OrderbookState.from_dict(json.loads(state.get))
+        book_state = OrderbookState.from_dict(json.loads(state.get["state_json"]))
     else:
         book_state = OrderbookState(
             contract_id=contract_id,
@@ -146,41 +149,48 @@ def process_orderbook_updates(
             continue
 
         try:
-            # Sort by event time
             pdf = pdf.sort_values("event_time")
+            pdf["action_norm"] = pdf["action"].astype(str).str.upper()
+            pdf["side_norm"] = pdf["side"].astype(str).str.upper()
 
-            # Vectorized processing: group by action and side
-            for action_type in pdf['action'].unique():
-                action_mask = pdf['action'] == action_type
+            event_count = int(len(pdf))
+            size_total = int(pdf["size"].sum())
+            buy_size = int(pdf.loc[pdf["side_norm"].isin(["B", "BUY", "BID"]), "size"].sum())
+            sell_size = int(pdf.loc[pdf["side_norm"].isin(["S", "SELL", "ASK", "A"]), "size"].sum())
+            notional = float((pdf["price"] * pdf["size"]).sum())
+            vwap = notional / size_total if size_total > 0 else 0.0
+            ofi = buy_size - sell_size
+            ofi_ratio = ofi / (buy_size + sell_size) if (buy_size + sell_size) > 0 else 0.0
+
+            for action_type in pdf["action_norm"].unique():
+                action_mask = pdf["action_norm"] == action_type
                 
-                if action_type in ("A", "a"):  # Add orders
-                    for side_type in pdf[action_mask]['side'].unique():
-                        mask = action_mask & (pdf['side'] == side_type)
+                if action_type == "A":
+                    for side_type in pdf[action_mask]["side_norm"].unique():
+                        mask = action_mask & (pdf["side_norm"] == side_type)
                         subset = pdf[mask]
                         
                         book = book_state.bids if side_type == "B" else book_state.asks
                         
-                        # Aggregate adds by price level
-                        price_agg = subset.groupby('price')['size'].sum()
+                        price_agg = subset.groupby("price")["size"].sum()
                         for price, size in price_agg.items():
                             book[price] = book.get(price, 0) + size
                 
-                elif action_type in ("C", "c"):  # Cancel orders
-                    for side_type in pdf[action_mask]['side'].unique():
-                        mask = action_mask & (pdf['side'] == side_type)
+                elif action_type == "C":
+                    for side_type in pdf[action_mask]["side_norm"].unique():
+                        mask = action_mask & (pdf["side_norm"] == side_type)
                         subset = pdf[mask]
                         
                         book = book_state.bids if side_type == "B" else book_state.asks
                         
-                        # Aggregate cancels by price level
-                        price_agg = subset.groupby('price')['size'].sum()
+                        price_agg = subset.groupby("price")["size"].sum()
                         for price, size in price_agg.items():
                             if price in book:
                                 book[price] = max(0, book[price] - size)
                                 if book[price] == 0:
                                     del book[price]
                 
-                elif action_type in ("T", "t"):  # Trades
+                elif action_type == "T":
                     trades = pdf[action_mask]
                     if len(trades) > 0:
                         last_trade = trades.iloc[-1]
@@ -188,33 +198,41 @@ def process_orderbook_updates(
                         book_state.last_trade_size = last_trade['size']
                         book_state.total_volume += trades['size'].sum()
 
-            # Update last event time
             book_state.last_update_ns = int(pdf['event_time'].max())
 
-            # Compute bar metrics from current state
             best_bid = max(book_state.bids.keys()) if book_state.bids else 0.0
             best_ask = min(book_state.asks.keys()) if book_state.asks else 0.0
             spread = best_ask - best_bid if best_bid and best_ask else 0.0
             mid_price = (best_bid + best_ask) / 2 if best_bid and best_ask else 0.0
 
-            # Get the bar timestamp (floor to 5s boundary)
-            bar_ts = (book_state.last_update_ns // BAR_DURATION_NS) * BAR_DURATION_NS
+            bucket_ns = (book_state.last_update_ns // BAR_DURATION_NS) * BAR_DURATION_NS
+            bucket_ts = pd.Timestamp(bucket_ns, unit="ns")
+            session_date = (
+                pd.Timestamp(book_state.last_update_ns, unit="ns", tz="UTC")
+                .tz_convert("America/New_York")
+                .date()
+            )
+            underlier = str(pdf["underlier"].iloc[-1])
+            instrument_type = str(pdf["instrument_type"].iloc[-1])
 
-            # Create bar output
             bar = {
                 "contract_id": contract_id,
-                "bar_ts": int(bar_ts),
-                "open_price": float(book_state.last_trade_price),
-                "high_price": float(book_state.last_trade_price),
-                "low_price": float(book_state.last_trade_price),
-                "close_price": float(book_state.last_trade_price),
-                "volume": int(book_state.total_volume),
-                "trade_count": int(len(pdf[pdf['action'].isin(['T', 't'])])),
-                "bid_price": float(best_bid),
-                "ask_price": float(best_ask),
+                "bucket_ns": int(bucket_ns),
+                "bucket_ts": bucket_ts,
+                "session_date": str(session_date),
+                "underlier": underlier,
+                "instrument_type": instrument_type,
+                "event_count": event_count,
+                "size_total": size_total,
+                "buy_size": buy_size,
+                "sell_size": sell_size,
+                "vwap": float(vwap),
+                "ofi": int(ofi),
+                "ofi_ratio": float(ofi_ratio),
+                "mid": float(mid_price),
                 "spread": float(spread),
-                "mid_price": float(mid_price),
-                "session_date": str(pd.Timestamp(book_state.last_update_ns, unit='ns').date()),
+                "best_bid": float(best_bid),
+                "best_ask": float(best_ask),
             }
             bars.append(bar)
         
@@ -223,7 +241,7 @@ def process_orderbook_updates(
             continue
 
     # Update state with EventTimeTimeout for automatic cleanup
-    state.update(json.dumps(book_state.to_dict()))
+    state.update({"state_json": json.dumps(book_state.to_dict())})
     state.setTimeoutDuration(600000)  # 10 minutes timeout
 
     if bars:
@@ -266,7 +284,7 @@ df_silver = (
         outputStructType=bar_5s_schema,
         stateStructType=state_output_schema,
         outputMode="append",
-        timeoutConf=GroupStateTimeout.EventTimeTimeout,
+        timeoutConf=GroupStateTimeout.ProcessingTimeTimeout,
     )
 )
 

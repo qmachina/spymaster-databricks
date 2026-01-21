@@ -212,9 +212,25 @@ query_delta = (
 # Publish to Event Hubs for Fabric dashboard
 logger.info(f"Publishing to Event Hub: {EVENTHUB_NAMESPACE}/{EVENTHUB_NAME}")
 
-ehConf = {
-    "eventhubs.connectionString": sc._jvm.org.apache.spark.eventhubs.EventHubsUtils.encrypt(
-        f"{EVENTHUB_CONNECTION_STRING};EntityPath={EVENTHUB_NAME}"
+if not EVENTHUB_NAMESPACE:
+    raise ValueError("eventhub_namespace is required")
+if not EVENTHUB_NAME:
+    raise ValueError("eventhub_name is required")
+if not EVENTHUB_CONNECTION_STRING:
+    raise ValueError("eventhub-connection-string is required")
+
+eventhub_conn_str = EVENTHUB_CONNECTION_STRING.split(";EntityPath=")[0].strip()
+if not eventhub_conn_str:
+    raise ValueError("eventhub-connection-string is empty")
+
+kafka_write_options = {
+    "kafka.bootstrap.servers": f"{EVENTHUB_NAMESPACE}.servicebus.windows.net:9093",
+    "topic": EVENTHUB_NAME,
+    "kafka.security.protocol": "SASL_SSL",
+    "kafka.sasl.mechanism": "PLAIN",
+    "kafka.sasl.jaas.config": (
+        'kafkashaded.org.apache.kafka.common.security.plain.PlainLoginModule '
+        f'required username="$ConnectionString" password="{eventhub_conn_str}";'
     ),
 }
 
@@ -232,14 +248,14 @@ df_to_eventhub = (
             col("prob_1"),
             col("inference_error"),
             col("inference_time"),
-        )).alias("body")
+        )).alias("value")
     )
 )
 
 query_eventhub = (
     df_to_eventhub.writeStream
-    .format("eventhubs")
-    .options(**ehConf)
+    .format("kafka")
+    .options(**kafka_write_options)
     .option("checkpointLocation", f"{CHECKPOINT_BASE}/rt__inference_eventhub")
     .trigger(processingTime="10 seconds")
     .start()
